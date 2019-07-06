@@ -24,10 +24,7 @@ func (g Parser) Convert(pattern string) (*fsm.StateMachine, error) {
 	}
 
 	initialState := g.stateGenerator.Next()
-
-	walkTree(regexTree, "")
 	transitions := g.parseTree(initialState, regexTree)
-
 	machine, err := fsm.New(
 		initialState,
 		transitions,
@@ -36,17 +33,6 @@ func (g Parser) Convert(pattern string) (*fsm.StateMachine, error) {
 		return nil, err
 	}
 	return machine, nil
-}
-
-func walkTree(tree *syntax.Regexp, pad string) ([]fsm.Transition, error) {
-	fmt.Println(pad, tree.Op, tree.Rune)
-	for _, node := range tree.Sub {
-		_, err := walkTree(node, pad+"-")
-		if err != nil {
-			return nil, err
-		}
-	}
-	return []fsm.Transition{}, nil
 }
 
 func (g Parser) parseTree(currentState fsm.State, tree *syntax.Regexp) []fsm.Transition {
@@ -61,6 +47,8 @@ func (g Parser) parseTree(currentState fsm.State, tree *syntax.Regexp) []fsm.Tra
 		return g.parsePlus(currentState, tree)
 	case syntax.OpConcat:
 		return g.parseConcat(currentState, tree)
+	case syntax.OpCharClass:
+		return g.parseCharClass(currentState, tree)
 	default:
 		panic(fmt.Sprintf("unsuported operation: %s", tree.Op))
 	}
@@ -109,6 +97,36 @@ func (g Parser) parseConcat(currentState fsm.State, concat *syntax.Regexp) []fsm
 		subTransitions := g.parseTree(source, expression)
 		source = subTransitions[len(subTransitions)-1].NextState
 		transitions = append(transitions, subTransitions...)
+	}
+	return transitions
+}
+
+func (g Parser) parseCharClass(currentState fsm.State, class *syntax.Regexp) []fsm.Transition {
+	transitions := []fsm.Transition{}
+	nextState := g.stateGenerator.Next()
+	// Group into batches of ranges.
+	// E.g [[a, b], [x, y]]
+	var ranges [][]rune
+	for i := 0; i < len(class.Rune); i += 2 {
+		ranges = append(ranges, []rune{
+			class.Rune[i],
+			class.Rune[i+1],
+		})
+	}
+	// Process each batch of two
+	for _, charRange := range ranges {
+		current := charRange[0]
+		last := charRange[1]
+		// TODO: Rather than generating every single rune, we should instead match events based on
+		// functions rather than just strings.
+		for current <= last {
+			transitions = append(transitions, fsm.Transition{
+				Event:     string(current),
+				Source:    currentState,
+				NextState: nextState,
+			})
+			current++
+		}
 	}
 	return transitions
 }
