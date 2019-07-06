@@ -19,6 +19,10 @@ func NewAcceptingState(value string) State {
 	}
 }
 
+func (s State) MakeAccepting() State {
+	return NewAcceptingState(s.Value())
+}
+
 func (s State) Accepting() bool {
 	return s.isAccepting
 }

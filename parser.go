@@ -9,13 +9,13 @@ import (
 
 func main() {
 	generator := NewFSMGenerator()
-	machine, err := generator.RegexToFSM("a*")
+	machine, err := generator.RegexToFSM("a*b|cd+")
 	if err != nil {
 		panic(err)
 	}
 
 	fmt.Printf(machine.ToGraphViz())
-	result := machine.Run([]string{"a", "a", "b"})
+	result := machine.Run([]string{"a", "a", "a"})
 	fmt.Printf("Result: %t\n", result)
 }
 
@@ -99,25 +99,18 @@ func (g FSMGenerator) parseLiteral(currentState fsm.State, literal *syntax.Regex
 	return transitions
 }
 
-func (g FSMGenerator) parseStar(currentState fsm.State, star *syntax.Regexp) []fsm.Transition {
+func (g FSMGenerator) parsePlus(currentState fsm.State, plus *syntax.Regexp) []fsm.Transition {
 	tempState := g.stateGenerator.Next()
 	return []fsm.Transition{
-		{Event: string(star.Sub[0].Rune[0]), Source: currentState, NextState: tempState},
-		{Event: string(star.Sub[0].Rune[0]), Source: tempState, NextState: tempState},
-		// {Event: "", Source: currentState, NextState: tempState},
+		{Event: string(plus.Sub[0].Rune[0]), Source: currentState, NextState: tempState},
+		{Event: string(plus.Sub[0].Rune[0]), Source: tempState, NextState: tempState},
 	}
 }
 
-func (g FSMGenerator) parsePlus(currentState fsm.State, plus *syntax.Regexp) []fsm.Transition {
-	tempState := g.stateGenerator.Next()
-	star := g.parseStar(tempState, plus)
-	transitions := append(
-		[]fsm.Transition{
-			{Event: string(plus.Sub[0].Rune[0]), Source: currentState, NextState: tempState},
-		},
-		star...,
-	)
-	return transitions
+func (g FSMGenerator) parseStar(currentState fsm.State, star *syntax.Regexp) []fsm.Transition {
+	return []fsm.Transition{
+		{Event: string(star.Sub[0].Rune[0]), Source: currentState, NextState: currentState},
+	}
 }
 
 func (g FSMGenerator) parseConcat(currentState fsm.State, concat *syntax.Regexp) []fsm.Transition {
@@ -126,7 +119,7 @@ func (g FSMGenerator) parseConcat(currentState fsm.State, concat *syntax.Regexp)
 	transitions := []fsm.Transition{}
 	for _, expression := range concat.Sub {
 		subTransitions := g.parseTree(source, expression)
-		source = subTransitions[len(subTransitions)-1].Source
+		source = subTransitions[len(subTransitions)-1].NextState
 		transitions = append(transitions, subTransitions...)
 	}
 	return transitions

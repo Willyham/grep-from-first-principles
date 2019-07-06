@@ -47,7 +47,7 @@ func (m *StateMachine) Run(events []string) bool {
 
 func (m *StateMachine) findTransition(next string) *Transition {
 	for _, t := range m.transitions {
-		if t.Source == m.currentState && t.Event == next {
+		if t.Source.Equal(m.currentState) && t.Event == next {
 			return &t
 		}
 	}
