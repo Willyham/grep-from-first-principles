@@ -1,4 +1,4 @@
-package main
+package regex2fsm
 
 import (
 	"fmt"
@@ -7,29 +7,17 @@ import (
 	"github.com/Willyham/gfp/fsm"
 )
 
-func main() {
-	generator := NewFSMGenerator()
-	machine, err := generator.RegexToFSM("a*b|cd+")
-	if err != nil {
-		panic(err)
-	}
-
-	fmt.Printf(machine.ToGraphViz())
-	result := machine.Run([]string{"a", "a", "a"})
-	fmt.Printf("Result: %t\n", result)
-}
-
-type FSMGenerator struct {
+type Parser struct {
 	stateGenerator fsm.StateGenerator
 }
 
-func NewFSMGenerator() *FSMGenerator {
-	return &FSMGenerator{
+func New() *Parser {
+	return &Parser{
 		stateGenerator: &fsm.NumericStateGenerator{},
 	}
 }
 
-func (g FSMGenerator) RegexToFSM(pattern string) (*fsm.StateMachine, error) {
+func (g Parser) Convert(pattern string) (*fsm.StateMachine, error) {
 	regexTree, err := syntax.Parse(pattern, syntax.POSIX)
 	if err != nil {
 		return nil, err
@@ -61,7 +49,7 @@ func walkTree(tree *syntax.Regexp, pad string) ([]fsm.Transition, error) {
 	return []fsm.Transition{}, nil
 }
 
-func (g FSMGenerator) parseTree(currentState fsm.State, tree *syntax.Regexp) []fsm.Transition {
+func (g Parser) parseTree(currentState fsm.State, tree *syntax.Regexp) []fsm.Transition {
 	switch tree.Op {
 	case syntax.OpAlternate:
 		return g.parseAlternate(currentState, tree)
@@ -78,13 +66,13 @@ func (g FSMGenerator) parseTree(currentState fsm.State, tree *syntax.Regexp) []f
 	}
 }
 
-func (g FSMGenerator) parseAlternate(currentState fsm.State, alternate *syntax.Regexp) []fsm.Transition {
+func (g Parser) parseAlternate(currentState fsm.State, alternate *syntax.Regexp) []fsm.Transition {
 	left := g.parseTree(currentState, alternate.Sub[0])
 	right := g.parseTree(currentState, alternate.Sub[1])
 	return append(left, right...)
 }
 
-func (g FSMGenerator) parseLiteral(currentState fsm.State, literal *syntax.Regexp) []fsm.Transition {
+func (g Parser) parseLiteral(currentState fsm.State, literal *syntax.Regexp) []fsm.Transition {
 	transitions := []fsm.Transition{}
 	last := currentState
 	for _, c := range literal.Rune {
@@ -99,7 +87,7 @@ func (g FSMGenerator) parseLiteral(currentState fsm.State, literal *syntax.Regex
 	return transitions
 }
 
-func (g FSMGenerator) parsePlus(currentState fsm.State, plus *syntax.Regexp) []fsm.Transition {
+func (g Parser) parsePlus(currentState fsm.State, plus *syntax.Regexp) []fsm.Transition {
 	tempState := g.stateGenerator.Next()
 	return []fsm.Transition{
 		{Event: string(plus.Sub[0].Rune[0]), Source: currentState, NextState: tempState},
@@ -107,13 +95,13 @@ func (g FSMGenerator) parsePlus(currentState fsm.State, plus *syntax.Regexp) []f
 	}
 }
 
-func (g FSMGenerator) parseStar(currentState fsm.State, star *syntax.Regexp) []fsm.Transition {
+func (g Parser) parseStar(currentState fsm.State, star *syntax.Regexp) []fsm.Transition {
 	return []fsm.Transition{
 		{Event: string(star.Sub[0].Rune[0]), Source: currentState, NextState: currentState},
 	}
 }
 
-func (g FSMGenerator) parseConcat(currentState fsm.State, concat *syntax.Regexp) []fsm.Transition {
+func (g Parser) parseConcat(currentState fsm.State, concat *syntax.Regexp) []fsm.Transition {
 	// Link current state to first state
 	source := currentState
 	transitions := []fsm.Transition{}
