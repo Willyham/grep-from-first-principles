@@ -163,3 +163,10 @@ func TestParseConcat(t *testing.T) {
 	}
 	assert.Equal(t, expected, transitions)
 }
+
+func BenchmarkParse(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		parser := New()
+		parser.Convert("a*b+|cd[e-g]+")
+	}
+}

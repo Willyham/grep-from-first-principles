@@ -14,7 +14,7 @@ import (
 
 func main() {
 	converter := regex2fsm.New()
-	machine, err := converter.Convert("a+")
+	machine, err := converter.Convert("a*b+|cd[e-g]+")
 	if err != nil {
 		panic(err)
 	}
