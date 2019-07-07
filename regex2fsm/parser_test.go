@@ -27,8 +27,8 @@ func TestParseCombined(t *testing.T) {
 	state := parser.stateGenerator.Next()
 	tree, err := syntax.Parse("a+b*|c[d-f]", syntax.POSIX)
 	require.NoError(t, err)
-	transitions := parser.parseTree(state, tree)
-	assert.Len(t, transitions, 7)
+	transitions := parser.parseTree(state, tree, false)
+	assert.Len(t, transitions, 9)
 }
 
 func TestParseUnsupported(t *testing.T) {
@@ -37,7 +37,7 @@ func TestParseUnsupported(t *testing.T) {
 	assert.Panics(t, func() {
 		tree, err := syntax.Parse("a.b", syntax.POSIX)
 		require.NoError(t, err)
-		parser.parseTree(state, tree)
+		parser.parseTree(state, tree, false)
 	})
 }
 
@@ -46,9 +46,21 @@ func TestParseLiteral(t *testing.T) {
 	state := parser.stateGenerator.Next()
 	literal, err := syntax.Parse("a", syntax.POSIX)
 	require.NoError(t, err)
-	transitions := parser.parseLiteral(state, literal)
+	transitions := parser.parseLiteral(state, literal, false)
 	expected := []fsm.Transition{
 		{Event: "a", Source: state, NextState: fsm.NewState("1")},
+	}
+	assert.Equal(t, expected, transitions)
+}
+
+func TestParseLiteralAccepting(t *testing.T) {
+	parser := New()
+	state := parser.stateGenerator.Next()
+	literal, err := syntax.Parse("a", syntax.POSIX)
+	require.NoError(t, err)
+	transitions := parser.parseLiteral(state, literal, true)
+	expected := []fsm.Transition{
+		{Event: "a", Source: state, NextState: fsm.NewAcceptingState("1")},
 	}
 	assert.Equal(t, expected, transitions)
 }
@@ -58,7 +70,7 @@ func TestParseLiteralMultiple(t *testing.T) {
 	state := parser.stateGenerator.Next()
 	literal, err := syntax.Parse("abc", syntax.POSIX)
 	require.NoError(t, err)
-	transitions := parser.parseLiteral(state, literal)
+	transitions := parser.parseLiteral(state, literal, false)
 	expected := []fsm.Transition{
 		{Event: "a", Source: state, NextState: fsm.NewState("1")},
 		{Event: "b", Source: fsm.NewState("1"), NextState: fsm.NewState("2")},
@@ -72,7 +84,7 @@ func TestParseClass(t *testing.T) {
 	state := parser.stateGenerator.Next()
 	class, err := syntax.Parse("[a-bA-B]", syntax.POSIX)
 	require.NoError(t, err)
-	transitions := parser.parseCharClass(state, class)
+	transitions := parser.parseCharClass(state, class, false)
 	expected := []fsm.Transition{
 		{Event: "A", Source: state, NextState: fsm.NewState("1")},
 		{Event: "B", Source: state, NextState: fsm.NewState("1")},
@@ -87,7 +99,7 @@ func TestParseClassSimplifiedAlternate(t *testing.T) {
 	state := parser.stateGenerator.Next()
 	class, err := syntax.Parse("a|b", syntax.POSIX)
 	require.NoError(t, err)
-	transitions := parser.parseCharClass(state, class)
+	transitions := parser.parseCharClass(state, class, false)
 	expected := []fsm.Transition{
 		{Event: "a", Source: state, NextState: fsm.NewState("1")},
 		{Event: "b", Source: state, NextState: fsm.NewState("1")},
@@ -100,7 +112,7 @@ func TestParseAlternateSub(t *testing.T) {
 	state := parser.stateGenerator.Next()
 	alternate, err := syntax.Parse("ab|cd", syntax.POSIX)
 	require.NoError(t, err)
-	transitions := parser.parseAlternate(state, alternate)
+	transitions := parser.parseAlternate(state, alternate, false)
 	expected := []fsm.Transition{
 		{Event: "a", Source: state, NextState: fsm.NewState("1")},
 		{Event: "b", Source: fsm.NewState("1"), NextState: fsm.NewState("2")},
@@ -112,25 +124,27 @@ func TestParseAlternateSub(t *testing.T) {
 
 func TestParsePlus(t *testing.T) {
 	parser := New()
-	state := parser.stateGenerator.Next()
+	initialState := parser.stateGenerator.Next()
 	plus, err := syntax.Parse("a+", syntax.POSIX)
 	require.NoError(t, err)
-	transitions := parser.parsePlus(state, plus)
+	transitions := parser.parsePlus(initialState, plus, false)
 	expected := []fsm.Transition{
-		{Event: "a", Source: state, NextState: fsm.NewState("1")},
-		{Event: "a", Source: fsm.NewState("1"), NextState: fsm.NewState("1")},
+		{Event: "a", Source: initialState, NextState: fsm.NewState("1")},
+		{Event: "a", Source: fsm.NewState("1"), NextState: fsm.NewState("2")},
+		{Event: "a", Source: fsm.NewState("2"), NextState: fsm.NewState("2")},
 	}
 	assert.Equal(t, expected, transitions)
 }
 
 func TestParseStar(t *testing.T) {
 	parser := New()
-	state := parser.stateGenerator.Next()
+	initialState := parser.stateGenerator.Next()
 	star, err := syntax.Parse("a*", syntax.POSIX)
 	require.NoError(t, err)
-	transitions := parser.parseStar(state, star)
+	transitions := parser.parseStar(initialState, star, false)
 	expected := []fsm.Transition{
-		{Event: "a", Source: state, NextState: state},
+		{Event: "a", Source: initialState, NextState: fsm.NewState("1")},
+		{Event: "a", Source: fsm.NewState("1"), NextState: fsm.NewState("1")},
 	}
 	assert.Equal(t, expected, transitions)
 }
@@ -140,10 +154,12 @@ func TestParseConcat(t *testing.T) {
 	state := parser.stateGenerator.Next()
 	concat, err := syntax.Parse("a*b*", syntax.POSIX)
 	require.NoError(t, err)
-	transitions := parser.parseConcat(state, concat)
+	transitions := parser.parseConcat(state, concat, false)
 	expected := []fsm.Transition{
-		{Event: "a", Source: state, NextState: state},
-		{Event: "b", Source: state, NextState: state},
+		{Event: "a", Source: state, NextState: fsm.NewState("1")},
+		{Event: "a", Source: fsm.NewState("1"), NextState: fsm.NewState("1")},
+		{Event: "b", Source: fsm.NewState("1"), NextState: fsm.NewState("2")},
+		{Event: "b", Source: fsm.NewState("2"), NextState: fsm.NewState("2")},
 	}
 	assert.Equal(t, expected, transitions)
 }

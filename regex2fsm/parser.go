@@ -17,6 +17,13 @@ func New() *Parser {
 	}
 }
 
+func (g Parser) getNextState(isAccepting bool) fsm.State {
+	if isAccepting {
+		return g.stateGenerator.NextAccepting()
+	}
+	return g.stateGenerator.Next()
+}
+
 func (g Parser) Convert(pattern string) (*fsm.StateMachine, error) {
 	regexTree, err := syntax.Parse(pattern, syntax.POSIX)
 	if err != nil {
@@ -24,7 +31,8 @@ func (g Parser) Convert(pattern string) (*fsm.StateMachine, error) {
 	}
 
 	initialState := g.stateGenerator.Next()
-	transitions := g.parseTree(initialState, regexTree)
+	transitions := g.parseTree(initialState, regexTree, true)
+
 	machine, err := fsm.New(
 		initialState,
 		transitions,
@@ -35,36 +43,37 @@ func (g Parser) Convert(pattern string) (*fsm.StateMachine, error) {
 	return machine, nil
 }
 
-func (g Parser) parseTree(currentState fsm.State, tree *syntax.Regexp) []fsm.Transition {
+func (g Parser) parseTree(currentState fsm.State, tree *syntax.Regexp, isAccepting bool) []fsm.Transition {
 	switch tree.Op {
 	case syntax.OpAlternate:
-		return g.parseAlternate(currentState, tree)
+		return g.parseAlternate(currentState, tree, isAccepting)
 	case syntax.OpLiteral:
-		return g.parseLiteral(currentState, tree)
+		return g.parseLiteral(currentState, tree, isAccepting)
 	case syntax.OpStar:
-		return g.parseStar(currentState, tree)
+		return g.parseStar(currentState, tree, isAccepting)
 	case syntax.OpPlus:
-		return g.parsePlus(currentState, tree)
+		return g.parsePlus(currentState, tree, isAccepting)
 	case syntax.OpConcat:
-		return g.parseConcat(currentState, tree)
+		return g.parseConcat(currentState, tree, isAccepting)
 	case syntax.OpCharClass:
-		return g.parseCharClass(currentState, tree)
+		return g.parseCharClass(currentState, tree, isAccepting)
 	default:
 		panic(fmt.Sprintf("unsuported operation: %s", tree.Op))
 	}
 }
 
-func (g Parser) parseAlternate(currentState fsm.State, alternate *syntax.Regexp) []fsm.Transition {
-	left := g.parseTree(currentState, alternate.Sub[0])
-	right := g.parseTree(currentState, alternate.Sub[1])
+func (g Parser) parseAlternate(currentState fsm.State, alternate *syntax.Regexp, isAccepting bool) []fsm.Transition {
+	left := g.parseTree(currentState, alternate.Sub[0], isAccepting)
+	right := g.parseTree(currentState, alternate.Sub[1], isAccepting)
 	return append(left, right...)
 }
 
-func (g Parser) parseLiteral(currentState fsm.State, literal *syntax.Regexp) []fsm.Transition {
+func (g Parser) parseLiteral(currentState fsm.State, literal *syntax.Regexp, isAccepting bool) []fsm.Transition {
 	transitions := []fsm.Transition{}
 	last := currentState
-	for _, c := range literal.Rune {
-		nextState := g.stateGenerator.Next()
+	for i, c := range literal.Rune {
+		isLast := i == len(literal.Rune)-1
+		nextState := g.getNextState(isAccepting && isLast)
 		transitions = append(transitions, fsm.Transition{
 			Event:     string(c),
 			Source:    fsm.State(last),
@@ -75,33 +84,41 @@ func (g Parser) parseLiteral(currentState fsm.State, literal *syntax.Regexp) []f
 	return transitions
 }
 
-func (g Parser) parsePlus(currentState fsm.State, plus *syntax.Regexp) []fsm.Transition {
-	tempState := g.stateGenerator.Next()
+func (g Parser) parsePlus(currentState fsm.State, plus *syntax.Regexp, isAccepting bool) []fsm.Transition {
+	midState := g.getNextState(isAccepting)
+	repeatingState := g.getNextState(isAccepting)
 	return []fsm.Transition{
-		{Event: string(plus.Sub[0].Rune[0]), Source: currentState, NextState: tempState},
-		{Event: string(plus.Sub[0].Rune[0]), Source: tempState, NextState: tempState},
+		{Event: string(plus.Sub[0].Rune[0]), Source: currentState, NextState: midState},
+		{Event: string(plus.Sub[0].Rune[0]), Source: midState, NextState: repeatingState},
+		{Event: string(plus.Sub[0].Rune[0]), Source: repeatingState, NextState: repeatingState},
 	}
 }
 
-func (g Parser) parseStar(currentState fsm.State, star *syntax.Regexp) []fsm.Transition {
+func (g Parser) parseStar(currentState fsm.State, star *syntax.Regexp, isAccepting bool) []fsm.Transition {
+	if isAccepting {
+		currentState = currentState.MakeAccepting()
+	}
+	tempState := g.getNextState(isAccepting)
 	return []fsm.Transition{
-		{Event: string(star.Sub[0].Rune[0]), Source: currentState, NextState: currentState},
+		{Event: string(star.Sub[0].Rune[0]), Source: currentState, NextState: tempState},
+		{Event: string(star.Sub[0].Rune[0]), Source: tempState, NextState: tempState},
 	}
 }
 
-func (g Parser) parseConcat(currentState fsm.State, concat *syntax.Regexp) []fsm.Transition {
+func (g Parser) parseConcat(currentState fsm.State, concat *syntax.Regexp, isAccepting bool) []fsm.Transition {
 	// Link current state to first state
 	source := currentState
 	transitions := []fsm.Transition{}
-	for _, expression := range concat.Sub {
-		subTransitions := g.parseTree(source, expression)
+	for i, expression := range concat.Sub {
+		isLast := i == len(concat.Sub)-1
+		subTransitions := g.parseTree(source, expression, isAccepting && isLast)
 		source = subTransitions[len(subTransitions)-1].NextState
 		transitions = append(transitions, subTransitions...)
 	}
 	return transitions
 }
 
-func (g Parser) parseCharClass(currentState fsm.State, class *syntax.Regexp) []fsm.Transition {
+func (g Parser) parseCharClass(currentState fsm.State, class *syntax.Regexp, isAccepting bool) []fsm.Transition {
 	transitions := []fsm.Transition{}
 	nextState := g.stateGenerator.Next()
 	// Group into batches of ranges.

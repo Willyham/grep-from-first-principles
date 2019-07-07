@@ -19,6 +19,7 @@ type Transition struct {
 }
 
 type StateMachine struct {
+	initialState State
 	currentState State
 	transitions  []Transition
 }
@@ -26,6 +27,7 @@ type StateMachine struct {
 func New(initial State, transitions []Transition) (*StateMachine, error) {
 	// TODO: Ensure set of valid transitions
 	return &StateMachine{
+		initialState: initial,
 		currentState: initial,
 		transitions:  transitions,
 	}, nil
@@ -35,14 +37,19 @@ func (m *StateMachine) Run(events []string) bool {
 	for _, event := range events {
 		transition := m.findTransition(event)
 		if transition == nil {
-			// if no transition exists between current state and next character, there is no match.
-			return false
+			// if no transition exists between current state and next character, we're done.
+			// Test if the state we're currently in is accepting.
+			return m.currentState.Accepting()
 		}
 		m.currentState = transition.NextState
 	}
 
 	// After all input, check if the state we finished in is in the set of final states.
 	return m.currentState.Accepting()
+}
+
+func (m *StateMachine) Reset() {
+	m.currentState = m.initialState
 }
 
 func (m *StateMachine) findTransition(next string) *Transition {
