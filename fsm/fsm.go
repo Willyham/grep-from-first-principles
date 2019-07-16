@@ -4,13 +4,7 @@ import (
 	"github.com/awalterschulze/gographviz"
 )
 
-/*
-Sigma  is the input alphabet (a finite, non-empty set of symbols). -> ASCII
-S is a finite, non-empty set of states.
-s0 is an initial state, an element of S.
-Delta is the state-transition function: Delta: Sigma x S -> S
-F is the set of final states, a (possibly empty) subset of {\displaystyle S} S.
-*/
+var DefaultAlphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
 type Transition struct {
 	Event     string
@@ -22,14 +16,15 @@ type StateMachine struct {
 	initialState State
 	currentState State
 	transitions  []Transition
+	alphabet     []string
 }
 
-func New(initial State, transitions []Transition) (*StateMachine, error) {
-	// TODO: Ensure set of valid transitions
+func New(initial State, transitions []Transition, alphabet []string) (*StateMachine, error) {
 	return &StateMachine{
 		initialState: initial,
 		currentState: initial,
 		transitions:  transitions,
+		alphabet:     alphabet,
 	}, nil
 }
 
@@ -68,29 +63,38 @@ func (m *StateMachine) ToGraphViz() string {
 
 	uniqueStates := map[State]bool{}
 	for _, transition := range m.transitions {
+		nodes := transitionToNodes(transition)
 		seenSource := uniqueStates[transition.Source]
 		if !seenSource {
-			uniqueStates[transition.Source] = true
-			attrs := map[string]string{}
-			if transition.Source.Accepting() {
-				attrs[string(gographviz.Shape)] = "doublecircle"
-			}
-			graph.AddNode(graph.Name, stringOrEpsilon(transition.Source.Value()), attrs)
+			graph.Nodes.Add(&nodes[0])
 		}
-		seenDest := uniqueStates[transition.NextState]
-		if !seenDest {
-			uniqueStates[transition.NextState] = true
-			attrs := map[string]string{}
-			if transition.NextState.Accepting() {
-				attrs[string(gographviz.Shape)] = "doublecircle"
-			}
-			graph.AddNode(graph.Name, stringOrEpsilon(transition.NextState.Value()), attrs)
+		seenNext := uniqueStates[transition.NextState]
+		if !seenNext {
+			graph.Nodes.Add(&nodes[1])
 		}
 		graph.AddEdge(stringOrEpsilon(transition.Source.Value()), stringOrEpsilon(transition.NextState.Value()), true, map[string]string{
 			"label": stringOrEpsilon(transition.Event),
 		})
 	}
 	return graph.String()
+}
+
+func transitionToNodes(transition Transition) []gographviz.Node {
+	return []gographviz.Node{
+		stateToNode(transition.Source),
+		stateToNode(transition.NextState),
+	}
+}
+
+func stateToNode(state State) gographviz.Node {
+	attrs, _ := gographviz.NewAttrs(nil) // Cannot error if empty map
+	if state.Accepting() {
+		attrs[gographviz.Shape] = "doublecircle"
+	}
+	return gographviz.Node{
+		Name:  stringOrEpsilon(state.Value()),
+		Attrs: attrs,
+	}
 }
 
 func stringOrEpsilon(in string) string {
