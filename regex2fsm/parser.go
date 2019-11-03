@@ -58,7 +58,7 @@ func (g Parser) parseTree(currentState fsm.State, tree *syntax.Regexp, isAccepti
 	case syntax.OpCharClass:
 		return g.parseCharClass(currentState, tree, isAccepting)
 	default:
-		panic(fmt.Sprintf("unsuported operation: %s", tree.Op))
+		panic(fmt.Sprintf("unsupported operation: %s", tree.Op))
 	}
 }
 

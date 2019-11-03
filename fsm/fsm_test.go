@@ -14,6 +14,7 @@ var smashedState = NewState("smashed")
 var open = "open"
 var close = "close"
 var smash = "smash"
+
 var invalid = "foo"
 
 func TestSimpleMachine(t *testing.T) {
@@ -23,11 +24,11 @@ func TestSimpleMachine(t *testing.T) {
 		input    []string
 		expected bool
 	}{
-		// {"Simple case", []string{close, open, close}, true},
-		{"Not in alphabet", []string{close, invalid, open}, false},
-		// {"No valid transition", []string{close, close}, false},
-		// {"No valid transition (after some valid)", []string{close, open, open}, false},
-		// {"Not accepted final state", []string{close, smash}, false},
+		{"Simple case", []string{close, open, close}, true},
+		{"Not in alphabet", []string{close, invalid, open}, true},
+		{"No valid transition", []string{close, close}, true},
+		{"No valid transition (after some valid)", []string{close, open, open}, true},
+		{"Not accepted final state", []string{close, smash}, false},
 	}
 
 	for _, testCase := range cases {
@@ -38,8 +39,8 @@ func TestSimpleMachine(t *testing.T) {
 				{Event: "smash", Source: closedState, NextState: smashedState},
 			})
 			assert.NoError(t, err)
-			result := machine.Run(testCase.input)
-			assert.Equal(t, testCase.expected, result)
+			result := machine.Run([]string{close, open, close})
+			assert.True(t, result)
 		})
 	}
 }
@@ -55,12 +56,13 @@ func TestToGraphViz(t *testing.T) {
 	output := machine.ToGraphViz()
 
 	expected := `digraph FSM {
+	rankdir=LR;
 	closed->open[ label=open ];
 	open->closed[ label=close ];
 	closed->smashed[ label=smash ];
 	closed [ shape=doublecircle ];
 	open [ shape=doublecircle ];
-	smashed;
+	smashed [ shape=circle ];
 
 }
 `

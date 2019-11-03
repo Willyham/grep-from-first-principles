@@ -13,20 +13,19 @@ import (
 )
 
 func main() {
-	converter := regex2fsm.New()
-	machine, err := converter.Convert("[a-b]+")
-	if err != nil {
-		panic(err)
-	}
+	pattern := os.Args[1]
+	filename := os.Args[2]
 
-	fmt.Printf(machine.ToGraphViz())
-	result := machine.Run([]string{"g", "o", "o", "d"})
-	fmt.Printf("Result: %t\n", result)
-	// searchInFile(machine)
+	converter := regex2fsm.New()
+	machine, err := converter.Convert(pattern)
+	if err != nil {
+		log.Fatal(err)
+	}
+	searchInFile(filename, machine)
 }
 
-func searchInFile(machine *fsm.StateMachine) {
-	file, err := os.Open("./words.txt")
+func searchInFile(filename string, machine *fsm.StateMachine) {
+	file, err := os.Open(filename)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -36,10 +35,9 @@ func searchInFile(machine *fsm.StateMachine) {
 	for scanner.Scan() {
 		line := scanner.Text()
 		tokens := strings.Split(line, "")
-		// fmt.Println(tokens)
 		result := machine.Run(tokens)
 		if result {
-			fmt.Printf("Found match in line: %s\n", line)
+			fmt.Println(line)
 		}
 		machine.Reset()
 	}

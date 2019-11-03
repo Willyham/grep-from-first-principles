@@ -4,8 +4,6 @@ import (
 	"github.com/awalterschulze/gographviz"
 )
 
-var DefaultAlphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-
 type Transition struct {
 	Event     string
 	Source    State
@@ -16,15 +14,13 @@ type StateMachine struct {
 	initialState State
 	currentState State
 	transitions  []Transition
-	alphabet     []string
 }
 
-func New(initial State, transitions []Transition, alphabet []string) (*StateMachine, error) {
+func New(initial State, transitions []Transition) (*StateMachine, error) {
 	return &StateMachine{
 		initialState: initial,
 		currentState: initial,
 		transitions:  transitions,
-		alphabet:     alphabet,
 	}, nil
 }
 
@@ -32,7 +28,7 @@ func (m *StateMachine) Run(events []string) bool {
 	for _, event := range events {
 		transition := m.findTransition(event)
 		if transition == nil {
-			// if no transition exists between current state and next character, we're done.
+			// If no transition exists between current state and next character, we're done.
 			// Test if the state we're currently in is accepting.
 			return m.currentState.Accepting()
 		}
@@ -47,9 +43,9 @@ func (m *StateMachine) Reset() {
 	m.currentState = m.initialState
 }
 
-func (m *StateMachine) findTransition(next string) *Transition {
+func (m *StateMachine) findTransition(event string) *Transition {
 	for _, t := range m.transitions {
-		if t.Source.Equal(m.currentState) && t.Event == next {
+		if t.Source.Equal(m.currentState) && t.Event == event {
 			return &t
 		}
 	}
@@ -60,6 +56,7 @@ func (m *StateMachine) ToGraphViz() string {
 	graph := gographviz.NewGraph()
 	graph.Name = "FSM"
 	graph.Directed = true
+	graph.Attrs[gographviz.RankDir] = "LR"
 
 	uniqueStates := map[State]bool{}
 	for _, transition := range m.transitions {
@@ -88,6 +85,7 @@ func transitionToNodes(transition Transition) []gographviz.Node {
 
 func stateToNode(state State) gographviz.Node {
 	attrs, _ := gographviz.NewAttrs(nil) // Cannot error if empty map
+	attrs[gographviz.Shape] = "circle"
 	if state.Accepting() {
 		attrs[gographviz.Shape] = "doublecircle"
 	}
