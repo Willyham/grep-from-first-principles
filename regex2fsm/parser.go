@@ -7,10 +7,14 @@ import (
 	"github.com/Willyham/gfp/fsm"
 )
 
+// Parser converts from a regular expression to a finite state machine.
 type Parser struct {
 	stateGenerator fsm.StateGenerator
 }
 
+// New creates a new parser.
+// States in the generated output will be labelled with monotonically increasing
+// integers.
 func New() *Parser {
 	return &Parser{
 		stateGenerator: &fsm.NumericStateGenerator{},
@@ -24,6 +28,7 @@ func (g Parser) getNextState(isAccepting bool) fsm.State {
 	return g.stateGenerator.Next()
 }
 
+// Convert between a regex pattern and a state machine.
 func (g Parser) Convert(pattern string) (*fsm.StateMachine, error) {
 	regexTree, err := syntax.Parse(pattern, syntax.POSIX)
 	if err != nil {
@@ -33,14 +38,7 @@ func (g Parser) Convert(pattern string) (*fsm.StateMachine, error) {
 	initialState := g.stateGenerator.Next()
 	transitions := g.parseTree(initialState, regexTree, true)
 
-	machine, err := fsm.New(
-		initialState,
-		transitions,
-	)
-	if err != nil {
-		return nil, err
-	}
-	return machine, nil
+	return fsm.New(initialState, transitions), nil
 }
 
 func (g Parser) parseTree(currentState fsm.State, tree *syntax.Regexp, isAccepting bool) []fsm.Transition {
@@ -121,8 +119,9 @@ func (g Parser) parseConcat(currentState fsm.State, concat *syntax.Regexp, isAcc
 func (g Parser) parseCharClass(currentState fsm.State, class *syntax.Regexp, isAccepting bool) []fsm.Transition {
 	transitions := []fsm.Transition{}
 	nextState := g.stateGenerator.Next()
-	// Group into batches of ranges.
-	// E.g [[a, b], [x, y]]
+	// Go's regex parser supports multiple ranges of char classes, like `a-c,x-z`. These are delivered
+	// as sequential runes (i.e) [a,c,x,z]. To process them, group into batches of ranges.
+	// E.g [[a, c], [x, z]]
 	var ranges [][]rune
 	for i := 0; i < len(class.Rune); i += 2 {
 		ranges = append(ranges, []rune{
@@ -134,7 +133,7 @@ func (g Parser) parseCharClass(currentState fsm.State, class *syntax.Regexp, isA
 	for _, charRange := range ranges {
 		current := charRange[0]
 		last := charRange[1]
-		// TODO: Rather than generating every single rune, we should instead match events based on
+		// TODO: Rather than generating every single rune, we could instead match events based on
 		// functions rather than just strings.
 		for current <= last {
 			transitions = append(transitions, fsm.Transition{

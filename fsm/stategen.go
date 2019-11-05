@@ -5,16 +5,19 @@ import (
 	"sync"
 )
 
+// StateGenerator allows generation of new states.
 type StateGenerator interface {
 	Next() State
 	NextAccepting() State
 }
 
+// NumericStateGenerator creates states with incrementing integer ids.
 type NumericStateGenerator struct {
 	counter int
 	sync.Mutex
 }
 
+// Next generates a newm non-accepting state.
 func (g *NumericStateGenerator) Next() State {
 	g.Lock()
 	defer g.Unlock()
@@ -23,6 +26,7 @@ func (g *NumericStateGenerator) Next() State {
 	return state
 }
 
+// NextAccepting generates a new accepting state.
 func (g *NumericStateGenerator) NextAccepting() State {
 	g.Lock()
 	defer g.Unlock()

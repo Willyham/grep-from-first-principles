@@ -6,16 +6,19 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-var openState = NewAcceptingState("open")
-var closedState = NewAcceptingState("closed")
-var smashedState = NewState("smashed")
+var (
+	openState    = NewAcceptingState("open")
+	closedState  = NewAcceptingState("closed")
+	smashedState = NewState("smashed")
+)
 
 // Events
-var open = "open"
-var close = "close"
-var smash = "smash"
-
-var invalid = "foo"
+var (
+	open    = "open"
+	close   = "close"
+	smash   = "smash"
+	invalid = "foo"
+)
 
 func TestSimpleMachine(t *testing.T) {
 	initial := openState
@@ -34,9 +37,9 @@ func TestSimpleMachine(t *testing.T) {
 	for _, testCase := range cases {
 		t.Run(testCase.name, func(t *testing.T) {
 			machine, err := New(initial, []Transition{
-				{Event: "open", Source: closedState, NextState: openState},
-				{Event: "close", Source: openState, NextState: closedState},
-				{Event: "smash", Source: closedState, NextState: smashedState},
+				{Event: open, Source: closedState, NextState: openState},
+				{Event: close, Source: openState, NextState: closedState},
+				{Event: smash, Source: closedState, NextState: smashedState},
 			})
 			assert.NoError(t, err)
 			result := machine.Run([]string{close, open, close})

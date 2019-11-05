@@ -4,26 +4,34 @@ import (
 	"github.com/awalterschulze/gographviz"
 )
 
+// Transition describes a possible way to move between states.
 type Transition struct {
 	Event     string
 	Source    State
 	NextState State
 }
 
+// StateMachine allows us to play events and compute the resulting state.
 type StateMachine struct {
 	initialState State
 	currentState State
 	transitions  []Transition
 }
 
-func New(initial State, transitions []Transition) (*StateMachine, error) {
+// New creates a StateMachine from the given transitions and initial state.
+// TODO: Ensure that transitions are valid by:
+// - Checking that all events exist within a given alphabet
+// - Ensuring that the list of transitions is deterministic (i.e. no duplicate
+//   [source,event] tuples)
+func New(initial State, transitions []Transition) *StateMachine {
 	return &StateMachine{
 		initialState: initial,
 		currentState: initial,
 		transitions:  transitions,
-	}, nil
+	}
 }
 
+// Run events through the state machine and determine if the resulting state is accepting.
 func (m *StateMachine) Run(events []string) bool {
 	for _, event := range events {
 		transition := m.findTransition(event)
@@ -39,6 +47,7 @@ func (m *StateMachine) Run(events []string) bool {
 	return m.currentState.Accepting()
 }
 
+// Reset the state machine to its initial state.
 func (m *StateMachine) Reset() {
 	m.currentState = m.initialState
 }
@@ -52,6 +61,7 @@ func (m *StateMachine) findTransition(event string) *Transition {
 	return nil
 }
 
+// ToGraphViz generates a graphviz representation of the state machine.
 func (m *StateMachine) ToGraphViz() string {
 	graph := gographviz.NewGraph()
 	graph.Name = "FSM"
